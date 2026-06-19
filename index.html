@@ -368,9 +368,13 @@ function getFaturaDate(purchaseDateStr,card){
   const pd=new Date(purchaseDateStr+'T12:00:00');
   const closeDay=parseInt(card.closeDay)||10;
   const dueDay=parseInt(card.dueDay)||15;
-  let fatMonth=pd.getMonth();let fatYear=pd.getFullYear();
-  if(pd.getDate()>closeDay){fatMonth+=1;if(fatMonth>11){fatMonth=0;fatYear++;}}
-  return `${fatYear}-${String(fatMonth+1).padStart(2,'0')}-${String(dueDay).padStart(2,'0')}`;
+  // Mês de fechamento: se a compra foi depois do fechamento, cai no fechamento do mês seguinte
+  let closeMonth=pd.getMonth();let closeYear=pd.getFullYear();
+  if(pd.getDate()>closeDay){closeMonth+=1;if(closeMonth>11){closeMonth=0;closeYear++;}}
+  // Mês de vencimento: sempre o mês seguinte ao fechamento
+  let dueMonth=closeMonth+1;let dueYear=closeYear;
+  if(dueMonth>11){dueMonth=0;dueYear++;}
+  return `${dueYear}-${String(dueMonth+1).padStart(2,'0')}-${String(dueDay).padStart(2,'0')}`;
 }
 function getFaturaMonthEntries(m,y){
   return entries.filter(e=>{
