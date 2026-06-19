@@ -164,7 +164,7 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 2px var(--border-primary)
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
 const CONFIG_KEY = 'cf-firebase-config';
@@ -259,13 +259,6 @@ async function initFirebase(cfg){
     renderConfigScreen('Erro ao iniciar Firestore: ' + e.message);
     return;
   }
-  try{
-    const result = await getRedirectResult(authInstance);
-    if(result?.user){
-      userId = result.user.uid;
-      currentUser = result.user;
-    }
-  }catch(e){ console.warn('redirect result:', e.message); }
   onAuthStateChanged(authInstance, async (user) => {
     if(user){
       userId = user.uid;
@@ -296,7 +289,7 @@ function renderLoginScreen(errorMsg){
 async function handleGoogleLogin(){
   try{
     const provider = new GoogleAuthProvider();
-    await signInWithRedirect(authInstance, provider);
+    await signInWithPopup(authInstance, provider);
   }catch(err){
     renderLoginScreen('Falha ao entrar: ' + err.message);
   }
