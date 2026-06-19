@@ -176,6 +176,16 @@ const CARD_COLORS=[
   {hex:'#1D9E75',label:'Verde'},{hex:'#BA7517',label:'Âmbar'},{hex:'#888780',label:'Cinza'},{hex:'#2C2C2A',label:'Preto'}
 ];
 
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCTgI_PUbCe32nXeA8fWsLcNn56jGhVVg0",
+  authDomain: "meu-financeiro-16320.firebaseapp.com",
+  projectId: "meu-financeiro-16320",
+  storageBucket: "meu-financeiro-16320.firebasestorage.app",
+  messagingSenderId: "794865959384",
+  appId: "1:794865959384:web:a2598674c90c50d6f372ad",
+  measurementId: "G-6CYMD2K6FN"
+};
+
 let entries=[];
 let cards=[];
 let currentMonth=new Date().getMonth();
@@ -262,32 +272,14 @@ function renderLoginScreen(errorMsg){
   document.getElementById('root').innerHTML = `
     <div class="config-screen" style="text-align:center">
       <h2>Controle financeiro</h2>
-      <p>Entre com sua conta Google para acessar seus dados de qualquer dispositivo.</p>
-      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">⚠️ O login com Google requer que o arquivo esteja hospedado em um servidor (não funciona via <code>file://</code>). Veja as instruções abaixo.</p>
+      <p>Entre com sua conta Google para acessar seus dados.</p>
       ${errorMsg ? `<p class="err-msg">${errorMsg}</p>` : ''}
       <button class="btn btn-primary" id="google-login-btn" style="margin-top:8px;display:inline-flex;align-items:center;gap:8px">
         <i class="ti ti-brand-google" aria-hidden="true"></i> Entrar com Google
       </button>
-      <div style="margin-top:1.5rem;text-align:left;background:var(--bg-secondary);border-radius:var(--radius-md);padding:14px;font-size:13px;line-height:1.7">
-        <strong>Como hospedar gratuitamente (Netlify Drop):</strong><br>
-        1. Acesse <a href="https://app.netlify.com/drop" target="_blank" style="color:var(--green)">app.netlify.com/drop</a><br>
-        2. Arraste o arquivo <code>controle-financeiro.html</code> para a área indicada<br>
-        3. Aguarde o deploy — você receberá uma URL <code>https://</code><br>
-        4. Adicione essa URL no Firebase Console em:<br>
-        &nbsp;&nbsp;Authentication → Configurações → Domínios autorizados → Adicionar domínio<br>
-        5. Acesse o app pela URL do Netlify e faça login normalmente
-      </div>
-      <p style="margin-top:1rem"><a href="#" id="reset-config-link-login" style="color:var(--text-tertiary);font-size:12px">trocar conexão Firebase</a></p>
     </div>
   `;
   document.getElementById('google-login-btn').onclick = handleGoogleLogin;
-  document.getElementById('reset-config-link-login').onclick = (e) => {
-    e.preventDefault();
-    if(confirm('Isso vai desconectar este navegador do Firebase atual. Continuar?')){
-      localStorage.removeItem(CONFIG_KEY);
-      location.reload();
-    }
-  };
 }
 
 async function handleGoogleLogin(){
@@ -567,7 +559,7 @@ function renderApp(){
           <div id="cartoes-list"></div>
         </div>
       </div>
-      <p style="text-align:center;font-size:11px;color:var(--text-tertiary);margin-top:1.5rem">Dados salvos no seu Firebase pessoal · <a href="#" id="reset-config-link" style="color:var(--text-tertiary)">trocar conexão</a></p>
+      <p style="text-align:center;font-size:11px;color:var(--text-tertiary);margin-top:1.5rem">Dados salvos no seu Firebase pessoal · <a href="#" id="reset-config-link" style="color:var(--text-tertiary)">trocar de conta</a></p>
     </div>
   `;
   attachEvents();
@@ -602,9 +594,8 @@ function attachEvents(){
   });
   document.getElementById('reset-config-link').onclick=(e)=>{
     e.preventDefault();
-    if(confirm('Isso vai desconectar este navegador do Firebase atual. Você poderá reconectar colando a configuração novamente. Continuar?')){
-      localStorage.removeItem(CONFIG_KEY);
-      location.reload();
+    if(confirm('Isso vai desconectar sua sessão atual. Continuar?')){
+      handleLogout();
     }
   };
   toggleParcelamento();
@@ -1049,12 +1040,7 @@ function clearForm(){
   document.getElementById('f-preview').textContent='';toggleParcelamento();
 }
 
-const existingConfig = getStoredConfig();
-if(existingConfig){
-  initFirebase(existingConfig);
-} else {
-  renderConfigScreen();
-}
+initFirebase(FIREBASE_CONFIG);
 </script>
 </body>
 </html>
