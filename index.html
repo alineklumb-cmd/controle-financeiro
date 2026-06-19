@@ -163,9 +163,9 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 2px var(--border-primary)
 </div>
 
 <script type="module">
-import { initializeApp } from "https://esm.sh/firebase@10.12.2/app";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://esm.sh/firebase@10.12.2/auth";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://esm.sh/firebase@10.12.2/firestore";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const CONFIG_KEY = 'cf-firebase-config';
 const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -263,7 +263,6 @@ async function initFirebase(cfg){
       }
     });
   }catch(e){
-    localStorage.removeItem(CONFIG_KEY);
     renderConfigScreen('Erro ao inicializar Firebase: ' + e.message);
   }
 }
