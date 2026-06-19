@@ -163,9 +163,9 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 2px var(--border-primary)
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
 const CONFIG_KEY = 'cf-firebase-config';
 const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -240,31 +240,43 @@ function handleConfigSave(){
 
 async function initFirebase(cfg){
   document.getElementById('root').innerHTML = `<div class="loading-screen"><div class="spinner"></div><p style="font-size:13px;color:var(--text-secondary)">Conectando ao Firebase...</p></div>`;
+  let app;
   try{
-    const app = initializeApp(cfg);
-    authInstance = getAuth(app);
-    db = getFirestore(app);
-    try{
-      const result = await getRedirectResult(authInstance);
-      if(result?.user){
-        userId = result.user.uid;
-        currentUser = result.user;
-      }
-    }catch(e){ console.warn('redirect result:', e.message); }
-    onAuthStateChanged(authInstance, async (user) => {
-      if(user){
-        userId = user.uid;
-        currentUser = user;
-        await loadData();
-        renderApp();
-        listenToRemoteChanges();
-      } else {
-        renderLoginScreen();
-      }
-    });
+    app = initializeApp(cfg);
   }catch(e){
-    renderConfigScreen('Erro ao inicializar Firebase: ' + e.message);
+    renderConfigScreen('Erro ao criar app Firebase: ' + e.message);
+    return;
   }
+  try{
+    authInstance = getAuth(app);
+  }catch(e){
+    renderConfigScreen('Erro ao iniciar Auth: ' + e.message);
+    return;
+  }
+  try{
+    db = getFirestore(app);
+  }catch(e){
+    renderConfigScreen('Erro ao iniciar Firestore: ' + e.message);
+    return;
+  }
+  try{
+    const result = await getRedirectResult(authInstance);
+    if(result?.user){
+      userId = result.user.uid;
+      currentUser = result.user;
+    }
+  }catch(e){ console.warn('redirect result:', e.message); }
+  onAuthStateChanged(authInstance, async (user) => {
+    if(user){
+      userId = user.uid;
+      currentUser = user;
+      await loadData();
+      renderApp();
+      listenToRemoteChanges();
+    } else {
+      renderLoginScreen();
+    }
+  });
 }
 
 function renderLoginScreen(errorMsg){
