@@ -407,6 +407,7 @@ function renderApp(){
         <button class="tab" data-tab="mensal"><i class="ti ti-calendar" aria-hidden="true"></i> Mensal</button>
         <button class="tab" data-tab="dividas"><i class="ti ti-refresh" aria-hidden="true"></i> Dívidas</button>
         <button class="tab" data-tab="cartoes"><i class="ti ti-settings" aria-hidden="true"></i> Cartões</button>
+        <button class="tab" data-tab="backup"><i class="ti ti-download" aria-hidden="true"></i> Backup</button>
       </div>
       <div class="content-card">
         <div id="tab-dashboard" class="panel active">
@@ -566,6 +567,30 @@ function renderApp(){
           </div>
           <div id="cartoes-list"></div>
         </div>
+
+        <div id="tab-backup" class="panel">
+          <div class="info-box">
+            <i class="ti ti-shield-check" aria-hidden="true" style="font-size:15px;margin-top:1px;flex-shrink:0"></i>
+            <span>Seus dados já ficam seguros no Firebase, sincronizados automaticamente. Esses exports são uma cópia extra — úteis para guardar localmente, abrir no Excel/Sheets, ou restaurar caso precise.</span>
+          </div>
+          <div class="form-card">
+            <p style="font-size:14px;font-weight:500;margin-bottom:6px">Exportar dados</p>
+            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px">Baixa um arquivo com todos os seus lançamentos e cartões atuais.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" id="export-csv-btn"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i> Exportar CSV</button>
+              <button class="btn" id="export-json-btn"><i class="ti ti-file-code" aria-hidden="true"></i> Exportar JSON</button>
+            </div>
+          </div>
+          <div class="form-card">
+            <p style="font-size:14px;font-weight:500;margin-bottom:6px">Importar backup (JSON)</p>
+            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px">Restaura lançamentos e cartões a partir de um arquivo JSON exportado anteriormente. <strong>Isso substitui os dados atuais</strong> — use com cuidado.</p>
+            <input type="file" id="import-json-input" accept="application/json" style="margin-bottom:10px">
+            <div>
+              <button class="btn btn-danger" id="import-json-btn"><i class="ti ti-upload" aria-hidden="true"></i> Importar e substituir</button>
+            </div>
+            <p id="import-msg" style="font-size:12px;margin-top:8px;display:none"></p>
+          </div>
+        </div>
       </div>
       <p style="text-align:center;font-size:11px;color:var(--text-tertiary);margin-top:1.5rem">Dados salvos no seu Firebase pessoal · <a href="#" id="reset-config-link" style="color:var(--text-tertiary)">trocar de conta</a></p>
     </div>
@@ -597,6 +622,9 @@ function attachEvents(){
   document.getElementById('clear-form-btn').onclick=clearForm;
   document.getElementById('div-filter').onchange=renderDividas;
   document.getElementById('add-card-btn').onclick=addCard;
+  document.getElementById('export-csv-btn').onclick=exportCSV;
+  document.getElementById('export-json-btn').onclick=exportJSON;
+  document.getElementById('import-json-btn').onclick=importJSON;
   document.querySelectorAll('#mensal-filters .toggle-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>setMensalFilter(btn, btn.dataset.filter));
   });
@@ -619,7 +647,7 @@ function refreshAllViews(){
 }
 
 function showTab(t){
-  const tabs=['dashboard','lancamentos','faturas','mensal','dividas','cartoes'];
+  const tabs=['dashboard','lancamentos','faturas','mensal','dividas','cartoes','backup'];
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   const idx=tabs.indexOf(t);
@@ -859,8 +887,8 @@ function itemHtml(e,today,compact){
   </div>`;
 }
 
-function deleteEntry(id){entries=entries.filter(x=>x.id!==id);save();renderDashboard();renderMensal();}
-function deleteGroup(gid){entries=entries.filter(x=>x.groupId!==gid);save();renderDashboard();renderMensal();}
+function deleteEntry(id){entries=entries.filter(x=>x.id!==id);save();renderDashboard();renderMensal();if(document.getElementById('tab-dividas').classList.contains('active'))renderDividas();if(document.getElementById('tab-faturas').classList.contains('active'))renderFaturas();}
+function deleteGroup(gid){entries=entries.filter(x=>x.groupId!==gid);save();renderDashboard();renderMensal();if(document.getElementById('tab-dividas').classList.contains('active'))renderDividas();if(document.getElementById('tab-faturas').classList.contains('active'))renderFaturas();}
 
 function setMensalFilter(btn,f){
   document.querySelectorAll('#mensal-filters .toggle-btn').forEach(b=>b.classList.remove('active'));
@@ -950,6 +978,76 @@ function selectColor(hex,el){
   selectedColor=hex;
   document.querySelectorAll('.color-swatch').forEach(s=>{s.classList.remove('selected');s.setAttribute('aria-checked','false');});
   el.classList.add('selected');el.setAttribute('aria-checked','true');
+}
+
+function exportCSV(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const headers=['Descrição','Tipo','Valor','Data','Status','Categoria','Cartão','Parcela'];
+  const rows=entries.map(e=>{
+    const st=getStatus(e,today);
+    const stLabel={paid:'Pago',pending:'Pendente',overdue:'Vencido',income:'Receita'}[st]||st;
+    const card=e.cardId?(cards.find(c=>c.id===e.cardId)||{}).name||'':'';
+    const parc=e.totalParcelas>1?`${e.parcelaAtual}/${e.totalParcelas}`:'';
+    return [e.desc,e.type==='income'?'Receita':'Despesa',parseFloat(e.value).toFixed(2).replace('.',','),fmtDateFull(e.date),stLabel,CATS[e.cat]||e.cat,card,parc];
+  });
+  const escapeCsv=v=>{
+    const s=String(v??'');
+    return /[;"\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  };
+  const csvLines=[headers.map(escapeCsv).join(';'), ...rows.map(r=>r.map(escapeCsv).join(';'))];
+  const csvContent='\uFEFF'+csvLines.join('\r\n');
+  downloadFile(csvContent,'controle-financeiro-'+todayStr()+'.csv','text/csv;charset=utf-8');
+}
+
+function exportJSON(){
+  const payload={entries,cards,exportedAt:new Date().toISOString(),version:1};
+  downloadFile(JSON.stringify(payload,null,2),'controle-financeiro-backup-'+todayStr()+'.json','application/json');
+}
+
+function todayStr(){
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function downloadFile(content,filename,mime){
+  const blob=new Blob([content],{type:mime});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename;
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importJSON(){
+  const input=document.getElementById('import-json-input');
+  const msg=document.getElementById('import-msg');
+  if(!input.files || !input.files[0]){
+    msg.style.color='var(--red)';msg.textContent='Selecione um arquivo JSON primeiro.';msg.style.display='block';
+    setTimeout(()=>msg.style.display='none',3000);
+    return;
+  }
+  if(!confirm('Isso vai SUBSTITUIR todos os dados atuais pelos dados do arquivo. Essa ação não pode ser desfeita. Deseja continuar?')) return;
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!Array.isArray(data.entries) || !Array.isArray(data.cards)) throw new Error('Formato inválido');
+      entries=data.entries;
+      cards=data.cards;
+      save();
+      msg.style.color='var(--green)';msg.textContent=`Importado com sucesso: ${entries.length} lançamento(s) e ${cards.length} cartão(ões).`;msg.style.display='block';
+      input.value='';
+      renderDashboard();renderCartoes();populateCardSelect();
+      if(document.getElementById('tab-faturas').classList.contains('active'))renderFaturas();
+      if(document.getElementById('tab-mensal').classList.contains('active'))renderMensal();
+      if(document.getElementById('tab-dividas').classList.contains('active'))renderDividas();
+    }catch(err){
+      msg.style.color='var(--red)';msg.textContent='Não foi possível ler o arquivo. Confira se é um backup JSON válido exportado por este app.';msg.style.display='block';
+    }
+    setTimeout(()=>msg.style.display='none',5000);
+  };
+  reader.readAsText(input.files[0]);
 }
 
 function addCard(){
