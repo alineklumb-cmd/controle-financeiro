@@ -447,12 +447,8 @@ function renderApp(){
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Valor total (R$)</label>
+                <label>Valor (R$)</label>
                 <input type="number" id="f-value" min="0" step="0.01" placeholder="0,00">
-              </div>
-              <div class="form-group">
-                <label>Data da compra / vencimento</label>
-                <input type="date" id="f-date">
               </div>
               <div class="form-group">
                 <label>Categoria</label>
@@ -468,8 +464,28 @@ function renderApp(){
                   <option value="outros">Outros</option>
                 </select>
               </div>
+              <div class="form-group">
+                <label>Forma de lançamento</label>
+                <select id="f-mode">
+                  <option value="single">Único</option>
+                  <option value="installments">Parcelado (cartão)</option>
+                  <option value="recurring">Recorrente (valor fixo todo mês)</option>
+                </select>
+              </div>
             </div>
-            <div class="form-row" id="parcelas-row">
+
+            <div class="form-row" id="single-row">
+              <div class="form-group">
+                <label>Data da compra / vencimento</label>
+                <input type="date" id="f-date">
+              </div>
+            </div>
+
+            <div class="form-row" id="parcelas-row" style="display:none">
+              <div class="form-group">
+                <label>Data da compra</label>
+                <input type="date" id="f-date-installments">
+              </div>
               <div class="form-group">
                 <label>Cartão</label>
                 <select id="f-card"><option value="">— Sem cartão (débito/boleto) —</option></select>
@@ -490,6 +506,19 @@ function renderApp(){
                 <select id="f-paid-count"><option value="0">Nenhuma paga ainda</option></select>
               </div>
             </div>
+
+            <div class="form-row" id="recurring-row" style="display:none">
+              <div class="form-group">
+                <label>Data do 1º vencimento</label>
+                <input type="date" id="f-rec-start">
+              </div>
+              <div class="form-group">
+                <label>Repetir até (último vencimento)</label>
+                <input type="date" id="f-rec-end">
+              </div>
+            </div>
+            <p id="rec-preview" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;display:none"></p>
+
             <div id="f-preview" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px"></div>
             <div style="display:flex;gap:8px">
               <button class="btn btn-primary" id="add-entry-btn"><i class="ti ti-check" aria-hidden="true"></i> Adicionar</button>
@@ -603,6 +632,7 @@ function renderApp(){
   renderCartoes();
   populateCardSelect();
   document.getElementById('f-date').valueAsDate = new Date();
+  document.getElementById('f-date-installments').valueAsDate = new Date();
 }
 
 function attachEvents(){
@@ -616,8 +646,11 @@ function attachEvents(){
   document.getElementById('mensal-prev').onclick=()=>changeMonth(-1);
   document.getElementById('mensal-next').onclick=()=>changeMonth(1);
   document.getElementById('f-type').onchange=toggleParcelamento;
+  document.getElementById('f-mode').onchange=toggleParcelamento;
   document.getElementById('f-value').oninput=updatePreview;
   document.getElementById('f-parcelas').onchange=updatePreview;
+  document.getElementById('f-rec-start').onchange=updateRecPreview;
+  document.getElementById('f-rec-end').onchange=updateRecPreview;
   document.getElementById('add-entry-btn').onclick=addEntry;
   document.getElementById('clear-form-btn').onclick=clearForm;
   document.getElementById('div-filter').onchange=renderDividas;
@@ -857,8 +890,8 @@ function attachItemEvents(){
   document.querySelectorAll('.toggle-paid-btn').forEach(el=>{
     el.addEventListener('click', (ev)=>{ ev.stopPropagation(); togglePaid(el.dataset.id); });
   });
-  document.querySelectorAll('.delete-entry-btn').forEach(el=>{
-    el.addEventListener('click', (ev)=>{ ev.stopPropagation(); deleteEntry(el.dataset.id); });
+  document.querySelectorAll('.delete-entry-smart-btn').forEach(el=>{
+    el.addEventListener('click', (ev)=>{ ev.stopPropagation(); smartDeleteEntry(el.dataset.id, el.dataset.group); });
   });
 }
 
@@ -883,12 +916,78 @@ function itemHtml(e,today,compact){
     ${badgeHtml(st)}
     <div class="li-val ${e.type==='income'?'income':'expense'}">${e.type==='income'?'+':'-'}${fmtVal(e.value)}</div>
     <button class="btn btn-sm ${st==='paid'?'':'btn-success'} toggle-paid-btn" data-id="${e.id}" title="${st==='paid'?'Desfazer':'Marcar pago'}"><i class="ti ti-${st==='paid'?'rotate-clockwise':'check'}" aria-hidden="true"></i></button>
-    ${!compact?`<button class="btn btn-sm btn-danger delete-entry-btn" data-id="${e.id}"><i class="ti ti-trash" aria-hidden="true"></i></button>`:''}
+    ${!compact?`<button class="btn btn-sm btn-danger delete-entry-smart-btn" data-id="${e.id}" data-group="${e.groupId||''}"><i class="ti ti-trash" aria-hidden="true"></i></button>`:''}
   </div>`;
 }
 
 function deleteEntry(id){entries=entries.filter(x=>x.id!==id);save();renderDashboard();renderMensal();if(document.getElementById('tab-dividas').classList.contains('active'))renderDividas();if(document.getElementById('tab-faturas').classList.contains('active'))renderFaturas();}
 function deleteGroup(gid){entries=entries.filter(x=>x.groupId!==gid);save();renderDashboard();renderMensal();if(document.getElementById('tab-dividas').classList.contains('active'))renderDividas();if(document.getElementById('tab-faturas').classList.contains('active'))renderFaturas();}
+
+function smartDeleteEntry(entryId, groupId){
+  const groupItems = entries.filter(e=>e.groupId===groupId).sort((a,b)=>(a.parcelaAtual||0)-(b.parcelaAtual||0));
+  if(groupItems.length<=1){
+    if(confirm('Excluir este lançamento?')) deleteEntry(entryId);
+    return;
+  }
+  const target = entries.find(e=>e.id===entryId);
+  if(!target) return;
+  showDeleteScopeModal(target, groupItems);
+}
+
+function showDeleteScopeModal(target, groupItems){
+  const idx = groupItems.findIndex(e=>e.id===target.id);
+  const hasPrevious = idx>0;
+  const hasNext = idx<groupItems.length-1;
+  const overlay = document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1rem';
+  overlay.innerHTML=`
+    <div style="background:var(--bg-primary);border-radius:var(--radius-lg);padding:1.4rem;max-width:380px;width:100%">
+      <p style="font-size:15px;font-weight:500;margin-bottom:4px">Excluir "${target.groupDesc||target.desc}"</p>
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:1rem">Parcela ${target.parcelaAtual} de ${target.totalParcelas} · ${fmtDateFull(target.date)}</p>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="btn" id="del-scope-only" style="text-align:left;justify-content:flex-start">Excluir somente esta parcela</button>
+        ${hasNext?`<button class="btn" id="del-scope-forward" style="text-align:left;justify-content:flex-start">Excluir esta e as próximas</button>`:''}
+        ${hasPrevious?`<button class="btn" id="del-scope-backward" style="text-align:left;justify-content:flex-start">Excluir esta e as anteriores</button>`:''}
+        <button class="btn btn-danger" id="del-scope-all" style="text-align:left;justify-content:flex-start">Excluir todas (grupo completo)</button>
+      </div>
+      <div style="margin-top:1rem;text-align:right">
+        <button class="btn btn-ghost" id="del-scope-cancel">Cancelar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close=()=>document.body.removeChild(overlay);
+  overlay.addEventListener('click',(e)=>{ if(e.target===overlay) close(); });
+  document.getElementById('del-scope-cancel').onclick=close;
+  document.getElementById('del-scope-only').onclick=()=>{
+    entries=entries.filter(x=>x.id!==target.id);
+    save();refreshAllRelevantViews();close();
+  };
+  if(hasNext){
+    document.getElementById('del-scope-forward').onclick=()=>{
+      const idsToRemove=groupItems.slice(idx).map(e=>e.id);
+      entries=entries.filter(x=>!idsToRemove.includes(x.id));
+      save();refreshAllRelevantViews();close();
+    };
+  }
+  if(hasPrevious){
+    document.getElementById('del-scope-backward').onclick=()=>{
+      const idsToRemove=groupItems.slice(0,idx+1).map(e=>e.id);
+      entries=entries.filter(x=>!idsToRemove.includes(x.id));
+      save();refreshAllRelevantViews();close();
+    };
+  }
+  document.getElementById('del-scope-all').onclick=()=>{
+    deleteGroup(target.groupId);
+    close();
+  };
+}
+
+function refreshAllRelevantViews(){
+  renderDashboard();renderMensal();
+  if(document.getElementById('tab-dividas').classList.contains('active'))renderDividas();
+  if(document.getElementById('tab-faturas').classList.contains('active'))renderFaturas();
+}
 
 function setMensalFilter(btn,f){
   document.querySelectorAll('#mensal-filters .toggle-btn').forEach(b=>b.classList.remove('active'));
@@ -949,9 +1048,10 @@ function renderDividas(){
           <span style="flex:1"></span>
           <span style="font-size:13px;font-weight:500;color:var(--red);min-width:88px;text-align:right">${fmtVal(e.value)}</span>
           <button class="btn btn-sm ${st==='paid'?'':'btn-success'} toggle-paid-btn" data-id="${e.id}"><i class="ti ti-${st==='paid'?'rotate-clockwise':'check'}" aria-hidden="true"></i></button>
+          <button class="btn btn-sm btn-danger delete-entry-smart-btn" data-id="${e.id}" data-group="${g.id}" title="Excluir esta parcela"><i class="ti ti-trash" aria-hidden="true"></i></button>
         </div>`;}).join('')}
         <div style="padding:7px 10px;border-top:0.5px solid var(--border-tertiary);margin-top:3px;display:flex;justify-content:flex-end">
-          <button class="btn btn-sm btn-danger delete-group-btn" data-id="${g.id}"><i class="ti ti-trash" aria-hidden="true"></i> Excluir</button>
+          <button class="btn btn-sm btn-danger delete-group-btn" data-id="${g.id}"><i class="ti ti-trash" aria-hidden="true"></i> Excluir tudo</button>
         </div>
       </div>
     </div>`;
@@ -961,6 +1061,9 @@ function renderDividas(){
   });
   document.querySelectorAll('.delete-group-btn').forEach(el=>{
     el.addEventListener('click', (ev)=>{ ev.stopPropagation(); deleteGroup(el.dataset.id); });
+  });
+  document.querySelectorAll('.delete-entry-smart-btn').forEach(el=>{
+    el.addEventListener('click', (ev)=>{ ev.stopPropagation(); smartDeleteEntry(el.dataset.id, el.dataset.group); });
   });
   attachItemEvents();
 }
@@ -1107,43 +1210,123 @@ function updatePreview(){
 }
 
 function toggleParcelamento(){
+  const mode=document.getElementById('f-mode').value;
+  document.getElementById('single-row').style.display=mode==='single'?'':'none';
+  document.getElementById('parcelas-row').style.display=mode==='installments'?'':'none';
+  document.getElementById('recurring-row').style.display=mode==='recurring'?'':'none';
+  document.getElementById('rec-preview').style.display='none';
   const t=document.getElementById('f-type').value;
-  document.getElementById('parcelas-row').style.display=t==='expense'?'':'none';
   if(t==='income') document.getElementById('f-cat').value='salario';
+}
+
+function updateRecPreview(){
+  const startStr=document.getElementById('f-rec-start').value;
+  const endStr=document.getElementById('f-rec-end').value;
+  const prev=document.getElementById('rec-preview');
+  if(!startStr||!endStr){prev.style.display='none';return;}
+  const count=countRecurringInstallments(startStr,endStr);
+  if(count<1){
+    prev.style.display='block';
+    prev.style.color='var(--red)';
+    prev.textContent='A data final precisa ser igual ou posterior ao 1º vencimento.';
+    return;
+  }
+  prev.style.display='block';
+  prev.style.color='var(--text-secondary)';
+  prev.textContent=`Serão criadas ${count} parcela${count>1?'s':''}, uma por mês, do vencimento informado até ${fmtDateFull(endStr)}.`;
+}
+
+function countRecurringInstallments(startStr,endStr){
+  const start=new Date(startStr+'T12:00:00');
+  const end=new Date(endStr+'T12:00:00');
+  if(end<start) return 0;
+  let count=0;
+  let d=new Date(start);
+  while(d<=end){
+    count++;
+    d=new Date(d);
+    d.setMonth(d.getMonth()+1);
+    if(count>120) break; // segurança contra loop infinito
+  }
+  return count;
 }
 
 function addEntry(){
   const desc=document.getElementById('f-desc').value.trim();
   const value=parseFloat(document.getElementById('f-value').value);
-  const date=document.getElementById('f-date').value;
   const type=document.getElementById('f-type').value;
   const cat=document.getElementById('f-cat').value;
-  const cardId=document.getElementById('f-card').value;
-  const parcelas=parseInt(document.getElementById('f-parcelas').value)||1;
-  const paidCount=parseInt(document.getElementById('f-paid-count').value)||0;
+  const mode=document.getElementById('f-mode').value;
   const msg=document.getElementById('f-msg');
-  if(!desc||!value||!date){msg.style.color='var(--red)';msg.textContent='Preencha descrição, valor e data.';msg.style.display='block';setTimeout(()=>msg.style.display='none',2500);return;}
-  const groupId='g_'+Date.now();
-  const perParcela=parseFloat((value/parcelas).toFixed(2));
-  const card=cards.find(c=>c.id===cardId);
-  for(let i=0;i<parcelas;i++){
-    const pd=new Date(date+'T12:00:00');pd.setMonth(pd.getMonth()+i);
-    const pdStr=pd.toISOString().split('T')[0];
-    const entryDate=card?getFaturaDate(pdStr,card):pdStr;
-    entries.push({id:'e_'+Date.now()+'_'+i,groupId,groupDesc:desc,desc:parcelas>1?`${desc} (${i+1}/${parcelas})`:desc,value:perParcela,date:entryDate,purchaseDate:i===0?date:null,type,cat,cardId:cardId||'',status:i<paidCount?'paid':'pending',totalParcelas:parcelas,parcelaAtual:i+1});
+
+  if(!desc||!value){msg.style.color='var(--red)';msg.textContent='Preencha descrição e valor.';msg.style.display='block';setTimeout(()=>msg.style.display='none',2500);return;}
+
+  if(mode==='single'){
+    const date=document.getElementById('f-date').value;
+    if(!date){msg.style.color='var(--red)';msg.textContent='Preencha a data.';msg.style.display='block';setTimeout(()=>msg.style.display='none',2500);return;}
+    entries.push({id:'e_'+Date.now(),groupId:'g_'+Date.now(),groupDesc:desc,desc,value,date,purchaseDate:date,type,cat,cardId:'',status:'pending',totalParcelas:1,parcelaAtual:1,kind:'single'});
+    save();
+    msg.style.color='var(--green)';msg.textContent='Lançamento adicionado!';msg.style.display='block';
+    setTimeout(()=>msg.style.display='none',3000);
+    clearForm();renderDashboard();
+    return;
   }
-  save();
-  msg.style.color='var(--green)';msg.textContent=parcelas>1?`${parcelas} parcelas adicionadas${card?' — fatura '+card.name:''}.`:'Lançamento adicionado!';msg.style.display='block';
-  setTimeout(()=>msg.style.display='none',3000);
-  clearForm();renderDashboard();
+
+  if(mode==='installments'){
+    const date=document.getElementById('f-date-installments').value;
+    const cardId=document.getElementById('f-card').value;
+    const parcelas=parseInt(document.getElementById('f-parcelas').value)||1;
+    const paidCount=parseInt(document.getElementById('f-paid-count').value)||0;
+    if(!date){msg.style.color='var(--red)';msg.textContent='Preencha a data da compra.';msg.style.display='block';setTimeout(()=>msg.style.display='none',2500);return;}
+    const groupId='g_'+Date.now();
+    const perParcela=parseFloat((value/parcelas).toFixed(2));
+    const card=cards.find(c=>c.id===cardId);
+    for(let i=0;i<parcelas;i++){
+      const pd=new Date(date+'T12:00:00');pd.setMonth(pd.getMonth()+i);
+      const pdStr=pd.toISOString().split('T')[0];
+      const entryDate=card?getFaturaDate(pdStr,card):pdStr;
+      entries.push({id:'e_'+Date.now()+'_'+i,groupId,groupDesc:desc,desc:parcelas>1?`${desc} (${i+1}/${parcelas})`:desc,value:perParcela,date:entryDate,purchaseDate:i===0?date:null,type,cat,cardId:cardId||'',status:i<paidCount?'paid':'pending',totalParcelas:parcelas,parcelaAtual:i+1,kind:'installments'});
+    }
+    save();
+    msg.style.color='var(--green)';msg.textContent=parcelas>1?`${parcelas} parcelas adicionadas${card?' — fatura '+card.name:''}.`:'Lançamento adicionado!';msg.style.display='block';
+    setTimeout(()=>msg.style.display='none',3000);
+    clearForm();renderDashboard();
+    return;
+  }
+
+  if(mode==='recurring'){
+    const startStr=document.getElementById('f-rec-start').value;
+    const endStr=document.getElementById('f-rec-end').value;
+    if(!startStr||!endStr){msg.style.color='var(--red)';msg.textContent='Preencha o 1º vencimento e a data final da recorrência.';msg.style.display='block';setTimeout(()=>msg.style.display='none',2500);return;}
+    const count=countRecurringInstallments(startStr,endStr);
+    if(count<1){msg.style.color='var(--red)';msg.textContent='A data final precisa ser igual ou posterior ao 1º vencimento.';msg.style.display='block';setTimeout(()=>msg.style.display='none',3000);return;}
+    const groupId='g_'+Date.now();
+    const start=new Date(startStr+'T12:00:00');
+    for(let i=0;i<count;i++){
+      const d=new Date(start);
+      d.setMonth(d.getMonth()+i);
+      const dStr=d.toISOString().split('T')[0];
+      entries.push({id:'e_'+Date.now()+'_'+i,groupId,groupDesc:desc,desc:`${desc} (${i+1}/${count})`,value,date:dStr,purchaseDate:null,type,cat,cardId:'',status:'pending',totalParcelas:count,parcelaAtual:i+1,kind:'recurring'});
+    }
+    save();
+    msg.style.color='var(--green)';msg.textContent=`${count} lançamentos recorrentes criados, de ${fmtDateFull(startStr)} até ${fmtDateFull(endStr)}.`;msg.style.display='block';
+    setTimeout(()=>msg.style.display='none',4000);
+    clearForm();renderDashboard();
+    return;
+  }
 }
 
 function clearForm(){
   document.getElementById('f-desc').value='';document.getElementById('f-value').value='';
-  document.getElementById('f-date').valueAsDate=new Date();document.getElementById('f-type').value='expense';
+  document.getElementById('f-date').valueAsDate=new Date();
+  document.getElementById('f-date-installments').valueAsDate=new Date();
+  document.getElementById('f-rec-start').value='';document.getElementById('f-rec-end').value='';
+  document.getElementById('f-type').value='expense';document.getElementById('f-mode').value='single';
   document.getElementById('f-cat').value='alimentacao';document.getElementById('f-parcelas').value='1';
   document.getElementById('f-paid-count').innerHTML='<option value="0">Nenhuma paga ainda</option>';
-  document.getElementById('f-preview').textContent='';toggleParcelamento();
+  document.getElementById('f-preview').textContent='';
+  document.getElementById('rec-preview').style.display='none';
+  toggleParcelamento();
 }
 
 initFirebase(FIREBASE_CONFIG);
