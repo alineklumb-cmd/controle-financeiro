@@ -1240,13 +1240,19 @@ function countRecurringInstallments(startStr,endStr){
   const start=new Date(startStr+'T12:00:00');
   const end=new Date(endStr+'T12:00:00');
   if(end<start) return 0;
+  const startDay=start.getDate();
+  const startMonth=start.getMonth();
+  const startYear=start.getFullYear();
   let count=0;
-  let d=new Date(start);
-  while(d<=end){
+  while(count<=120){
+    let m=startMonth+count;
+    let y=startYear+Math.floor(m/12);
+    m=m%12;
+    const maxDay=new Date(y,m+1,0).getDate();
+    const day=Math.min(startDay,maxDay);
+    const d=new Date(y,m,day,12,0,0);
+    if(d>end) break;
     count++;
-    d=new Date(d);
-    d.setMonth(d.getMonth()+1);
-    if(count>120) break; // segurança contra loop infinito
   }
   return count;
 }
@@ -1281,9 +1287,17 @@ function addEntry(){
     const groupId='g_'+Date.now();
     const perParcela=parseFloat((value/parcelas).toFixed(2));
     const card=cards.find(c=>c.id===cardId);
+    const baseDate=new Date(date+'T12:00:00');
+    const baseDay=baseDate.getDate();
+    const baseMonth=baseDate.getMonth();
+    const baseYear=baseDate.getFullYear();
     for(let i=0;i<parcelas;i++){
-      const pd=new Date(date+'T12:00:00');pd.setMonth(pd.getMonth()+i);
-      const pdStr=pd.toISOString().split('T')[0];
+      let m=baseMonth+i;
+      let y=baseYear+Math.floor(m/12);
+      m=m%12;
+      const maxDay=new Date(y,m+1,0).getDate();
+      const day=Math.min(baseDay,maxDay);
+      const pdStr=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
       const entryDate=card?getFaturaDate(pdStr,card):pdStr;
       entries.push({id:'e_'+Date.now()+'_'+i,groupId,groupDesc:desc,desc:parcelas>1?`${desc} (${i+1}/${parcelas})`:desc,value:perParcela,date:entryDate,purchaseDate:i===0?date:null,type,cat,cardId:cardId||'',status:i<paidCount?'paid':'pending',totalParcelas:parcelas,parcelaAtual:i+1,kind:'installments'});
     }
@@ -1302,10 +1316,16 @@ function addEntry(){
     if(count<1){msg.style.color='var(--red)';msg.textContent='A data final precisa ser igual ou posterior ao 1º vencimento.';msg.style.display='block';setTimeout(()=>msg.style.display='none',3000);return;}
     const groupId='g_'+Date.now();
     const start=new Date(startStr+'T12:00:00');
+    const startDay=start.getDate();
+    const startMonth=start.getMonth();
+    const startYear=start.getFullYear();
     for(let i=0;i<count;i++){
-      const d=new Date(start);
-      d.setMonth(d.getMonth()+i);
-      const dStr=d.toISOString().split('T')[0];
+      let m=startMonth+i;
+      let y=startYear+Math.floor(m/12);
+      m=m%12;
+      const maxDay=new Date(y,m+1,0).getDate();
+      const day=Math.min(startDay,maxDay);
+      const dStr=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
       entries.push({id:'e_'+Date.now()+'_'+i,groupId,groupDesc:desc,desc:`${desc} (${i+1}/${count})`,value,date:dStr,purchaseDate:null,type,cat,cardId:'',status:'pending',totalParcelas:count,parcelaAtual:i+1,kind:'recurring'});
     }
     save();
