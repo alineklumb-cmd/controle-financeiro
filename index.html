@@ -816,7 +816,11 @@ function faturaCardHtml(card,items,idPrefix,showPagarBtn){
         return `<div class="fatura-item">
           <div class="fatura-item-desc">
             <div class="fatura-item-name">${e.groupDesc||e.desc}${pi}</div>
-            <div class="fatura-item-meta">Compra: ${fmtDateFull(e.purchaseDate||e.date)} <span class="tag">${CATS[e.cat]||e.cat}</span></div>
+            <div class="fatura-item-meta">
+              Data da compra: ${fmtDateFull(e.originalPurchaseDate||e.purchaseDate||e.date)}
+              ${e.originalPurchaseDate&&e.purchaseDate&&e.originalPurchaseDate!==e.purchaseDate?` · Data de vencimento da parcela: ${fmtDateFull(e.purchaseDate)}`:''}
+              <span class="tag">${CATS[e.cat]||e.cat}</span>
+            </div>
           </div>
           ${badgeHtml(st)}
           <div class="fatura-item-val">${fmtVal(e.value)}</div>
@@ -1299,7 +1303,7 @@ function addEntry(){
       const day=Math.min(baseDay,maxDay);
       const pdStr=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
       const entryDate=card?getFaturaDate(pdStr,card):pdStr;
-      entries.push({id:'e_'+Date.now()+'_'+i,groupId,groupDesc:desc,desc:parcelas>1?`${desc} (${i+1}/${parcelas})`:desc,value:perParcela,date:entryDate,purchaseDate:pdStr,type,cat,cardId:cardId||'',status:i<paidCount?'paid':'pending',totalParcelas:parcelas,parcelaAtual:i+1,kind:'installments'});
+      entries.push({id:'e_'+Date.now()+'_'+i,groupId,groupDesc:desc,desc:parcelas>1?`${desc} (${i+1}/${parcelas})`:desc,value:perParcela,date:entryDate,purchaseDate:pdStr,originalPurchaseDate:date,type,cat,cardId:cardId||'',status:i<paidCount?'paid':'pending',totalParcelas:parcelas,parcelaAtual:i+1,kind:'installments'});
     }
     save();
     msg.style.color='var(--green)';msg.textContent=parcelas>1?`${parcelas} parcelas adicionadas${card?' — fatura '+card.name:''}.`:'Lançamento adicionado!';msg.style.display='block';
