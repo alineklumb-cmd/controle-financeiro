@@ -380,7 +380,13 @@ function getFaturaMonthEntries(m,y){
   return entries.filter(e=>{
     if(e.type!=='expense'||!e.cardId) return false;
     const card=cards.find(c=>c.id===e.cardId);if(!card)return false;
-    const fd=getFaturaDate(e.purchaseDate||e.date,card);
+    // Se não tem purchaseDate, usa date diretamente (parcela com vencimento já fixado)
+    let fd;
+    if(e.purchaseDate){
+      fd=getFaturaDate(e.purchaseDate,card);
+    } else {
+      fd=e.date;
+    }
     const d=new Date(fd+'T12:00:00');
     return d.getMonth()===m&&d.getFullYear()===y;
   });
